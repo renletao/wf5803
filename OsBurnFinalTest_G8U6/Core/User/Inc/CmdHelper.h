@@ -28,4 +28,6 @@ void ParseI2CCmd(uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16_t out_le
 void ParseSerialCmd(uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16_t out_lens);
 
 void ParseProductCmd(uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16_t out_lens);
+
+void ParseSPICmd(uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16_t out_lens);
 #endif /* INC_CMDHELPER_H_ */

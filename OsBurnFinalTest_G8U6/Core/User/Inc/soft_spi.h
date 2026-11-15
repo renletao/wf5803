@@ -29,21 +29,26 @@ extern "C" {
  * 硬件配置：换引脚只改这一段
  * 每个信号的端口时钟单独使能，这样即使四个脚分布在不同的 GPIO 端口也能工作
  * ==========================================================================*/
-#define SOFT_SPI_SCK_PORT          GPIOA
-#define SOFT_SPI_SCK_PIN           GPIO_PIN_5
-#define SOFT_SPI_SCK_CLK_ENABLE()  __HAL_RCC_GPIOA_CLK_ENABLE()
+/* SCK 待定：本板 .ioc 里只有 EX_SPI_MISO(PA8) / EX_SPI_MOSI(PC6) / EX_SPI_CS(PB1)，
+ * 下面三行是占位值，确认后改掉。
+ * 注意 PA4/PA5/PA6/PA7 在本板是 EX_VDD/EX_VPP/EX_SCL/EX_SDA，不能当 SPI 用
+ * （那是从小型号板带过来的旧值）。 */
+#define SOFT_SPI_SCK_PORT          GPIOB
+#define SOFT_SPI_SCK_PIN           GPIO_PIN_0
+#define SOFT_SPI_SCK_CLK_ENABLE()  __HAL_RCC_GPIOB_CLK_ENABLE()
 
-#define SOFT_SPI_MOSI_PORT         GPIOA
-#define SOFT_SPI_MOSI_PIN          GPIO_PIN_7
-#define SOFT_SPI_MOSI_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
+/* 以下三根是本板实测引脚，对应 main.h 的 EX_SPI_MOSI / EX_SPI_MISO / EX_SPI_CS */
+#define SOFT_SPI_MOSI_PORT         GPIOC
+#define SOFT_SPI_MOSI_PIN          GPIO_PIN_6
+#define SOFT_SPI_MOSI_CLK_ENABLE() __HAL_RCC_GPIOC_CLK_ENABLE()
 
 #define SOFT_SPI_MISO_PORT         GPIOA
-#define SOFT_SPI_MISO_PIN          GPIO_PIN_6
+#define SOFT_SPI_MISO_PIN          GPIO_PIN_8
 #define SOFT_SPI_MISO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
 
-#define SOFT_SPI_CS_PORT           GPIOA
-#define SOFT_SPI_CS_PIN            GPIO_PIN_4
-#define SOFT_SPI_CS_CLK_ENABLE()   __HAL_RCC_GPIOA_CLK_ENABLE()
+#define SOFT_SPI_CS_PORT           GPIOB
+#define SOFT_SPI_CS_PIN            GPIO_PIN_1
+#define SOFT_SPI_CS_CLK_ENABLE()   __HAL_RCC_GPIOB_CLK_ENABLE()
 
 /* 半个时钟周期的延时。
  * 用 HAL_GPIO_WritePin 时，一个边沿本身就要 ~1us（函数调用开销），

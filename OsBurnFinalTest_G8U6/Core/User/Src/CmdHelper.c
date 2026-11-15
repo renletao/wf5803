@@ -12,6 +12,7 @@
 #include "../Inc/OsCheck.h"
 #include "../Inc/Sensor2200.h"
 #include "../Inc/MCP4725.h"
+#include "../Inc/soft_spi.h"
 
 #define DATA_LENGTH                 64
 //一类：系统指令
@@ -98,6 +99,42 @@ void ParseOwiCmd(uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16_t out_le
 }
 
 /*
+ * 六类：SPI 通讯方式指令
+ *   SPI 是全双工，发多少字节就同时收多少字节，所以只用一个长度：
+ *     cmd[2]      事务字节数 n
+ *     cmd[3..]    要发出去的 n 个字节，一个寄存器放一个字节
+ *     out[0..]    同一笔事务收回来的 n 个字节，原样回传不做解析
+ *
+ *   读寄存器就自己发 {0x80, 地址, 0xFF}，第 3 个字节是哑元只为产生时钟，
+ *   收回来 rx[2] 才是数据；写寄存器发 {0x00, 地址, 数据}。
+ *   切 4 线 SPI 也要先发 {0x00, 0x00, 0x01}，否则 SDO 不输出。
+ */
+void ParseSPICmd(uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16_t out_lens) {
+    uint8_t tx[16] = {0};                       /* 单笔事务最长 16 字节，够读 5 个寄存器 */
+    uint8_t rx[16] = {0};
+    uint8_t len = (uint8_t) cmd[2];
+    uint8_t i;
+
+    if (len == 0) return;
+    if (len > 16) return;                       /* 超出缓冲 */
+    if (cmd_lens < len + 3) return;             /* 下发的数据不足 */
+    if (len > out_lens) return;                 /* 返回区放不下 */
+
+    /* 把上位机下发的字节按顺序摆到 MOSI 上 */
+    for (i = 0; i < len; i++) {
+        tx[i] = (uint8_t) cmd[3 + i];
+    }
+
+    soft_spi_init();
+    soft_spi_transfer(tx, rx, len);
+
+    /* MISO 上收到的字节原样回传 */
+    for (i = 0; i < len; i++) {
+        out[i] = rx[i];
+    }
+}
+
+/*
  *
  */
 void Parse(uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16_t out_lens) {
@@ -114,6 +151,9 @@ void Parse(uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16_t out_lens) {
             break;
         case 5:
             ParseOwiCmd(cmd, cmd_lens, out, out_lens);
+            break;
+        case 6:
+            ParseSPICmd(cmd, cmd_lens, out, out_lens);
             break;
         default:
             break;
