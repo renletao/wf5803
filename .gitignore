@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+._*
+
+# WorkBuddy 项目数据（本地工具生成，不入库）
+.workbuddy/
+
+# STM32CubeIDE 编译输出
+Debug/
+Release/
+*.o
+*.d
+*.su
+*.cyclo
+*.elf
+*.map
+*.list
+*.hex
+*.bin
+*.siz
+*.build_log
+
+# Eclipse 本地元数据
+.metadata/
+RemoteSystemsTempFiles/
