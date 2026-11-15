@@ -21,6 +21,7 @@
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
+#include "soft_spi.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -61,39 +62,30 @@ void SystemClock_Config(void);
  * 这句强制链接浮点 printf，等价于链接参数 -u _printf_float */
 __asm__(".global _printf_float");
 
-/* CS 片选：PA4，普通 GPIO，整个事务期间保持低电平 */
-#define WF_CS_LOW()   HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET)
-#define WF_CS_HIGH()  HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET)
-
 /* ------------------------------------------------------------------
- * WF5803 寄存器读写
- *   写：{ 0x00, 地址, 数据 }   tx[0] 的 bit7=0 表示写
- *   读：{ 0x80, 地址, 0xFF }   tx[0] 的 bit7=1 表示读、bit6:5=00 表示读 1 字节
- *                              tx[2]=0xFF 是 dummy，只为凑出 8 个时钟把数据顶回来
- * CS 全程拉低，一次 3 字节事务发完。
+ * WF5803 寄存器读写（协议归应用层，驱动只管传输）
+ *   写：{ 0x00, 地址, 数据 }   bit7=0 表示写
+ *   读：{ 0x80, 地址, 0xFF }   bit7=1 表示读、bit6:5=00 表示读 1 字节
+ * CS 由 soft_spi_transfer() 自动包住整笔事务
  * ------------------------------------------------------------------ */
 
 /* 写一个寄存器 */
 static void wf_write_reg(uint8_t addr, uint8_t value)
 {
-  uint8_t tx[3] = { 0x00, addr, value };
-  uint8_t rx[3] = { 0, 0, 0 };
+  const uint8_t tx[3] = { 0x00, addr, value };
 
-  WF_CS_LOW();
-  HAL_SPI_TransmitReceive(&hspi1, tx, rx, 3, 20);
-  WF_CS_HIGH();
+  soft_spi_transfer(tx, NULL, 3);
 }
 
-/* 读一个寄存器，返回第 3 个字节（rx[0]/rx[1] 是发命令和地址时的回环，没用） */
+/* 读一个寄存器 */
 static uint8_t wf_read_reg(uint8_t addr)
 {
-  uint8_t tx[3] = { 0x80, addr, 0xFF };
-  uint8_t rx[3] = { 0, 0, 0 };
+  const uint8_t tx[3] = { 0x80, addr, 0xFF };
+  uint8_t rx[3];
 
-  WF_CS_LOW();
-  HAL_SPI_TransmitReceive(&hspi1, tx, rx, 3, 20);
-  WF_CS_HIGH();
-  return rx[2];
+  soft_spi_transfer(tx, rx, 3);
+
+  return rx[2];        /* 前两个字节是命令/地址的回环，第 3 个才是数据 */
 }
 
 /* USER CODE END 0 */
@@ -127,30 +119,15 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_SPI1_Init();
+  /* MX_SPI1_Init();  硬件 SPI 已停用，改用软件模拟 SPI */
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   uint8_t i;
 
-  printf("\r\nWF5803 test | SPI1 281.25kHz | Mode0 | CS=PA4\r\n");
+  printf("\r\nWF5803 test | soft SPI (GPIO) | Mode0 | CS=PA4\r\n");
 
-  WF_CS_HIGH();
-  HAL_Delay(10);                      /* 等传感器上电稳定，太早发命令会被忽略 */
-
-  /* ---- 诊断用（调通后可删）：直接看一次 HAL 调用的返回值和 3 个字节 ----
-   * st: 0=HAL_OK  1=HAL_ERROR  2=HAL_BUSY  3=HAL_TIMEOUT
-   * rx[0]/rx[1] 是回环，rx[2] 才是 0x00 寄存器的值 */
-  {
-    uint8_t tx[3] = { 0x80, 0x00, 0xFF };
-    uint8_t rx[3] = { 0xAA, 0xAA, 0xAA };
-    HAL_StatusTypeDef st;
-
-    WF_CS_LOW();
-    st = HAL_SPI_TransmitReceive(&hspi1, tx, rx, 3, 20);
-    WF_CS_HIGH();
-    printf("probe: st=%d rx=%02X %02X %02X\r\n",
-           (int)st, rx[0], rx[1], rx[2]);
-  }
+  soft_spi_init();          /* PA5=SCK / PA7=MOSI / PA4=CS 推挽输出，PA6=MISO 上拉输入 */
+  HAL_Delay(10);            /* 等传感器上电稳定，太早发命令会被忽略 */
 
   /* ---- 写 0x00 = 0x01：SDO_active 置 1，从 3 线切成 4 线 SPI ----
    * 这一笔如果没被芯片接受，SDO 会一直是输入，之后所有读都是 0xFF。

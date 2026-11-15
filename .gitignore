@@ -23,3 +23,6 @@ Release/
 # Eclipse 本地元数据
 .metadata/
 RemoteSystemsTempFiles/
+
+# CubeIDE 索引器本地路径缓存（每个用户不同，不入库）
+**/.settings/language.settings.xml
