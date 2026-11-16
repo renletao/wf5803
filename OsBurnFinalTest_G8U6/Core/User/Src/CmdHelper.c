@@ -32,7 +32,7 @@ void ParseSystemCmd(const uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16
         case TYPE1_OS_CHECK:
             ADC_DMA_Read_Block_NDTR(out, 11, 200);
             break;
-        case TYPE1_2200_FT:
+        case TYPE1_2200_FT:  //0x206
             Get2200FinalTestData(out, cmd[2]);
             break;
         case TYPE1_2200_OFFSET:
