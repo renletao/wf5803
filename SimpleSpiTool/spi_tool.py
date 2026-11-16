@@ -12,10 +12,10 @@
   固件内部自己完成：切 4 线 → 写 0x30=0x0A 组合触发 → 轮询 DRDY → 连读气压温度
   典型 15~25 ms，最坏约 45 ms，所以这条命令超时要给到 1 s。
 
-其他命令：
+  其他命令：
   读版本   写 [1, 0x0104]  读 2 个
-  设 VDD   写 [1, 0x0207, mV]
-  电源     写 [1, 0x0208, on, vpp, os]  读 1 个（1 = 固件支持）
+  设压+上电 写 [1, 0x0207, mV]，读 2 个：out[0]=1 表示已执行，out[1]=实际生效的电压
+            mV 传 0 表示断电（固件会断开 VDD_PU，而不是把电压设成 0V）
 
 地址：写 40000 / 读 30000（固件回调收到 40001/30001，FreeModbus 会先 +1）
 """
@@ -38,7 +38,7 @@ ADDR_W = 40000
 ADDR_R = 30000
 
 T_SYS, T_SPI = 1, 6
-SYS_VERSION, SYS_VDD, SYS_POWER = 0x0104, 0x0207, 0x0208
+SYS_VERSION, SYS_VDD = 0x0104, 0x0207
 
 ERR_TEXT = {
     0x00: ("正常", "#3B6D11"),
@@ -366,6 +366,12 @@ class App(tk.Tk):
         self.log("[读版本] 写 1,0x0104  ->  %s" % text)
         self.status("固件版本 %s" % text, "#3B6D11")
 
+    def _set_vdd(self, mv):
+        """0x0207 = 设压 + 上电（mv=0 表示断电）。返回 (ack, 实际生效值)"""
+        self.mb.write_regs([T_SYS, SYS_VDD, mv])
+        regs = self.mb.read_regs(2)
+        return regs[0], regs[1]
+
     def do_power_on(self):
         if not self.require_conn():
             return
@@ -374,33 +380,37 @@ class App(tk.Tk):
         except ValueError:
             messagebox.showwarning("提示", "VDD 要填数字（mV）")
             return
+        if mv <= 0:
+            messagebox.showwarning("提示", "上电请填大于 0 的电压（mV）")
+            return
         try:
-            self.mb.write_regs([T_SYS, SYS_VDD, mv])
-            self.mb.write_regs([T_SYS, SYS_POWER, 1, 0, 0])
-            ack = self.mb.read_regs(1)[0]
+            ack, echo = self._set_vdd(mv)
         except Exception as e:
             self.log("[上电] 失败：%s" % e)
             self.status("上电失败：%s" % e, "#A32D2D")
             return
         if ack == 1:
-            self.log("[上电] 0x0207=%d mV + 0x0208 开  ->  ack=1" % mv)
-            self.status("已上电 %d mV" % mv, "#3B6D11")
+            note = ""
+            if echo != mv:
+                note = "（被钳位，原填 %d）" % mv
+            self.log("[上电] 0x0207 = %d mV（设压+送电）  ->  ack=1 生效 %d mV%s"
+                     % (mv, echo, note))
+            self.status("已上电 %d mV%s" % (echo, note), "#3B6D11")
         else:
-            self.log("[上电] 0x0208 回读 %s —— 固件没有这条命令" % ack)
-            self.status("固件不支持 0x0208", "#A32D2D")
+            self.log("[上电] 0x0207 回读 %d —— 固件没执行这条命令（还是旧固件？）" % ack)
+            self.status("固件未执行 0x0207", "#A32D2D")
 
     def do_power_off(self):
         if not self.require_conn():
             return
         try:
-            self.mb.write_regs([T_SYS, SYS_POWER, 0, 0, 0])
-            ack = self.mb.read_regs(1)[0]
+            ack, echo = self._set_vdd(0)
         except Exception as e:
             self.log("[断电] 失败：%s" % e)
             self.status("断电失败：%s" % e, "#A32D2D")
             return
-        self.log("[断电] 0x0208 关  ->  ack=%d" % ack)
-        self.status("已断电" if ack == 1 else "固件不支持 0x0208", "#A32D2D")
+        self.log("[断电] 0x0207 = 0（断开 VDD_PU）  ->  ack=%d" % ack)
+        self.status("已断电" if ack == 1 else "固件未执行 0x0207", "#A32D2D")
 
     def toggle_cont(self):
         if self.var_cont.get():
@@ -486,6 +496,8 @@ class App(tk.Tk):
 
         text, color = ERR_TEXT.get(err, ("未知错误码 0x%02X" % err, "#A32D2D"))
         self.log("[采集] err=0x%02X  %s" % (err, text))
+        if err == 0x02:
+            self.log("        err=0x02 表示传感器没电：先点 [上电]（0x0207 会设压并送电）")
         self.status("采集失败：err=0x%02X  %s" % (err, text), color)
 
     # ------------------------------------------------------------

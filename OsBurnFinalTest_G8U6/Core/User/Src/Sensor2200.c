@@ -86,10 +86,8 @@ void Get2200FinalTestData(uint16_t *dst, uint8_t cmpMode) {
     uint8_t err;
     uint8_t n = 1;
     MCP4725_WriteData_Voltage(cmpMode ? 2000 : 3300);
-    SetIoStatus(0, 0, 0);
     osDelay(50);
     SetIoStatus(0, 0, 1);
-    osDelay(50);
     if (cmpMode) {
         if ((err = ReadCoefs(&dst[n]))) goto exit_end;
         MCP4725_WriteData_Voltage(3300);

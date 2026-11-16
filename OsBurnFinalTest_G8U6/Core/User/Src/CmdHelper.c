@@ -39,9 +39,28 @@ void ParseSystemCmd(const uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16
             out[0] = Set2200Offset((uint8_t) cmd[2]);
             break;
 
-        case TYPE1_SET_VDD:
-        	MCP4725_WriteData_Voltage(cmd[2]);
-        	break;
+        case TYPE1_SET_VDD: {
+            /* 设压 + 上电一体：
+             *   MCP4725 只决定电压值，VDD_PU(PA1) 才把电送到传感器。
+             *   参数 > 0 表示"设压并上电"；参数 = 0 表示"断电"（断开 VDD_PU，
+             *   而不是把电压设成 0V —— 那样开关还合着，不是真断电）。 */
+            uint16_t mv = (uint16_t) cmd[2];
+
+            if (mv == 0) {
+                SetIoStatus(0, 0, 0);           /* 断电：VDD_PU 断开 */
+                out[1] = 0;
+            } else {
+                if (mv > 6000) {
+                    mv = 6000;                  /* 12 位 DAC：(mV+200) 之后 Dn 会溢出 */
+                }
+                MCP4725_WriteData_Voltage(mv);
+                osDelay(10);                    /* 等 DAC 输出建立 */
+                SetIoStatus(0, 0, 1);           /* 合上开关，电压才真正加到传感器 */
+                out[1] = mv;                    /* 回实际生效的电压，便于核对钳位 */
+            }
+            out[0] = 1;                         /* 1 = 命令已执行，上位机据此判断 */
+            break;
+        }
 
         default:
             break;
