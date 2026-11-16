@@ -6,7 +6,6 @@
 #include "cmsis_os.h"
 #include "../Inc/MCP4725.h"
 #include "../Inc/SoftIIC.h"
-#include "../Inc/soft_spi.h"
 
 #define IIC_DEVICE_ADDR		0xDA
 static I2CPin info2200;
@@ -86,10 +85,6 @@ exit_end:
 void Get2200FinalTestData(uint16_t *dst, uint8_t cmpMode) {
     uint8_t err;
     uint8_t n = 1;
-    uint8_t tx[3];
-    uint8_t rx[3];
-    uint8_t i;
-
     MCP4725_WriteData_Voltage(cmpMode ? 2000 : 3300);
     SetIoStatus(0, 0, 0);
     osDelay(50);
@@ -103,49 +98,9 @@ void Get2200FinalTestData(uint16_t *dst, uint8_t cmpMode) {
     n += 19;
     if ((err = ReadCoefs(&dst[n]))) goto exit_end;
     n += 19;
-    if ((err = ReadCalOut(&dst[n]))) goto exit_end;         /* dst[39..43] */
+    if ((err = ReadCalOut(&dst[n]))) goto exit_end;
     n += 5;
-
-    /* 气压 + 温度原始码值改走 SPI（验证 SPI 通道用），每次用之前先初始化引脚
-     *   dst[44..46] 气压 24 位，高→中→低（寄存器 0x06/0x07/0x08）
-     *   dst[47..48] 温度 16 位，高→低（寄存器 0x09/0x0A） */
-    soft_spi_init();
-
-    tx[0] = 0x00; tx[1] = 0x00; tx[2] = 0x01;   /* 0x00 写 0x01：切 4 线 SPI */
-    soft_spi_transfer(tx, rx, 3);
-    osDelay(5);
-
-    /* 温度：0x30 写 0x08 触发转换，等 50ms，读 0x09(高)/0x0A(低) */
-    tx[0] = 0x00; tx[1] = 0x30; tx[2] = 0x08;
-    soft_spi_transfer(tx, rx, 3);
-    osDelay(50);
-    for (i = 0; i < 2; i++) {
-        tx[0] = 0x80; tx[1] = (uint8_t) (0x09 + i); tx[2] = 0xFF;
-        soft_spi_transfer(tx, rx, 3);
-        dst[n + 3 + i] = rx[2];                     /* 温度放 dst[47..48] */
-    }
-
-    /* 气压：0x30 写 0x09 触发转换，轮询 0x02 的 bit0，读 0x06/0x07/0x08 */
-    tx[0] = 0x00; tx[1] = 0x30; tx[2] = 0x09;
-    soft_spi_transfer(tx, rx, 3);
-    for (i = 0; i < 20; i++) {
-        osDelay(5);
-        tx[0] = 0x80; tx[1] = 0x02; tx[2] = 0xFF;
-        soft_spi_transfer(tx, rx, 3);
-        if (rx[2] & 0x01) break;
-    }
-    for (i = 0; i < 3; i++) {
-        tx[0] = 0x80; tx[1] = (uint8_t) (0x06 + i); tx[2] = 0xFF;
-        soft_spi_transfer(tx, rx, 3);
-        dst[n + i] = rx[2];
-    }
-
-    /* 气压读回全 0xFF 说明 SPI 没通（芯片没切 4 线 / MISO 悬空），报出来 */
-    if (dst[n] == 0xFF && dst[n + 1] == 0xFF && dst[n + 2] == 0xFF) {
-        err = 0x03;
-    }
-    n += 5;
-
+    //TODO:SPI
 exit_end:
     dst[0] = err;
     MCP4725_WriteData_Voltage(0);
@@ -180,4 +135,3 @@ exit_end:
     SetIoStatus(0, 0, 0);
     return err;
 }
-
