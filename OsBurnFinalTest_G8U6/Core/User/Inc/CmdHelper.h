@@ -14,6 +14,7 @@
 #define TYPE1_OS_CHECK                      0x205
 #define TYPE1_2200_FT                       0x206
 #define TYPE1_SET_VDD                       0x207
+#define TYPE1_SET_POWER                     0x208   /* 新增 */
 
 #define TYPE1_2200_OFFSET                   0x999
 

@@ -29,13 +29,19 @@ extern "C" {
  * 硬件配置：换引脚只改这一段
  * 每个信号的端口时钟单独使能，这样即使四个脚分布在不同的 GPIO 端口也能工作
  * ==========================================================================*/
-/* SCK 待定：本板 .ioc 里只有 EX_SPI_MISO(PA8) / EX_SPI_MOSI(PC6) / EX_SPI_CS(PB1)，
- * 下面三行是占位值，确认后改掉。
- * 注意 PA4/PA5/PA6/PA7 在本板是 EX_VDD/EX_VPP/EX_SCL/EX_SDA，不能当 SPI 用
- * （那是从小型号板带过来的旧值）。 */
-#define SOFT_SPI_SCK_PORT          GPIOB
-#define SOFT_SPI_SCK_PIN           GPIO_PIN_0
-#define SOFT_SPI_SCK_CLK_ENABLE()  __HAL_RCC_GPIOB_CLK_ENABLE()
+/* SCK 复用 EX_SCL(PA6)：传感器只有一根时钟脚（焊盘 1 SCLK，"Serial data clock"，
+ * I2C 的 SCL 与 SPI 的 SCLK 是同一个焊盘），12 芯排线（J2）里能接这根脚的只有
+ * I2C_SCL 网络 → PA6。本板没有独立的 SPI_SCK 引脚，所以 SCK 必须落在 PA6。
+ *
+ * 由此带来两条使用约束：
+ *   1) 同一个焊盘先跑 I2C、再切 4 线 SPI，所以 soft_spi_init() 必须在 I2C 通信
+ *      （Sensor2200_Init 里的 IIC_Init）和 ADC_MspInit 之后调用 —— 它会把这几个
+ *      脚从 OD/ANALOG 重新切成推挽输出。当前 Sensor2200.c 每次读之前都调一次。
+ *   2) I2C 的 SDA(PA7)/SCL(PA6) 都是开漏输出，切到 SPI 后 PA7 保持释放（高阻），
+ *      不会和 MOSI(PC6) 抢同一根数据线。 */
+#define SOFT_SPI_SCK_PORT          GPIOA
+#define SOFT_SPI_SCK_PIN           GPIO_PIN_6
+#define SOFT_SPI_SCK_CLK_ENABLE()  __HAL_RCC_GPIOA_CLK_ENABLE()
 
 /* 以下三根是本板实测引脚，对应 main.h 的 EX_SPI_MOSI / EX_SPI_MISO / EX_SPI_CS */
 #define SOFT_SPI_MOSI_PORT         GPIOC

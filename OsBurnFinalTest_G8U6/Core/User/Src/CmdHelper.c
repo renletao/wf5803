@@ -43,6 +43,12 @@ void ParseSystemCmd(const uint16_t *cmd, uint8_t cmd_lens, uint16_t *out, uint16
         	MCP4725_WriteData_Voltage(cmd[2]);
         	break;
 
+        case TYPE1_SET_POWER:
+                    /* cmd[2]=传感器VDD  cmd[3]=VPP  cmd[4]=OS，1=开 0=关 */
+                    SetIoStatus((uint8_t) cmd[4], (uint8_t) cmd[3], (uint8_t) cmd[2]);
+                    out[0] = 1;          /* 回 1 = 命令存在，上位机据此判断 */
+                    break;
+
         default:
             break;
     }
